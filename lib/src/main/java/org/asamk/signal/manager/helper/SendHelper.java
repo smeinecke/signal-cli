@@ -705,6 +705,17 @@ public class SendHelper {
                     successCount,
                     addresses.size());
 
+            final var successfulAddresses = results.stream()
+                    .filter(SendMessageResult::isSuccess)
+                    .flatMap(r -> r.getSuccess()
+                            .getDevices()
+                            .stream()
+                            .map(device -> new SignalProtocolAddress(r.getAddress().getIdentifier(), device)))
+                    .toList();
+            if (!successfulAddresses.isEmpty()) {
+                account.getSenderKeyStore().markSenderKeySharedWith(distributionId, successfulAddresses);
+            }
+
             return results;
         } catch (org.whispersystems.signalservice.api.crypto.UntrustedIdentityException e) {
             return null;
