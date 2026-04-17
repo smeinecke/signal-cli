@@ -1,19 +1,25 @@
 [versions]
 slf4j = "2.0.17"
-junit = "6.0.2"
+junit = "6.0.3"
+micronaut-json-schema = "2.0.0-M8"
+micronaut-core = "4.9.3"
 
 [libraries]
-bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.83"
+bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.84"
 jackson-databind = "com.fasterxml.jackson.core:jackson-databind:2.20.2"
 argparse4j = "net.sourceforge.argparse4j:argparse4j:0.9.0"
 dbusjava = "com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.0.0"
 zxing = "com.google.zxing:core:3.5.4"
+micronaut-json-schema-annotations = { module = "io.micronaut.jsonschema:micronaut-json-schema-annotations", version.ref = "micronaut-json-schema" }
+micronaut-json-schema-processor = { module = "io.micronaut.jsonschema:micronaut-json-schema-processor", version.ref = "micronaut-json-schema" }
+micronaut-json-schema-generator = { module = "io.micronaut.jsonschema:micronaut-json-schema-generator", version.ref = "micronaut-json-schema" }
+micronaut-inject-java = { module = "io.micronaut:micronaut-inject-java", version.ref = "micronaut-core" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 logback = "ch.qos.logback:logback-classic:1.5.32"
 
-signalservice = "com.github.turasa:signal-service-java:2.15.3_unofficial_143"
-sqlite = "org.xerial:sqlite-jdbc:3.51.2.0"
+signalservice = "com.github.turasa:signal-service-java:2.15.3_unofficial_144"
+sqlite = "org.xerial:sqlite-jdbc:3.53.0.0"
 hikari = "com.zaxxer:HikariCP:7.0.2"
 junit-jupiter-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
