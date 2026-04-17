@@ -25,10 +25,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.channels.ClosedChannelException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -43,6 +45,9 @@ public class SignalJsonRpcDispatcherHandler {
 
     private final Map<Integer, List<Pair<Manager, Manager.ReceiveMessageHandler>>> receiveHandlers = new HashMap<>();
     private final Map<Integer, List<Pair<Manager, Manager.CallEventListener>>> callEventHandlers = new HashMap<>();
+    private final String connectionKeepAliveToken = "jsonrpc-" + UUID.randomUUID();
+    private final List<Manager> keepAliveManagers = new ArrayList<>();
+    private boolean connectionActive = true;
     private SignalJsonRpcCommandHandler commandHandler;
 
     public SignalJsonRpcDispatcherHandler(
@@ -69,6 +74,10 @@ public class SignalJsonRpcDispatcherHandler {
         c.addOnManagerAddedHandler(m -> callEventHandlers.forEach((subscriptionId, handlers) -> handlers.add(
                 createCallEventHandler(m, subscriptionId))));
 
+        c.getManagers().forEach(this::registerKeepAlive);
+        c.addOnManagerAddedHandler(this::registerKeepAlive);
+        c.addOnManagerRemovedHandler(this::unregisterKeepAlive);
+
         handleConnection();
     }
 
@@ -81,6 +90,8 @@ public class SignalJsonRpcDispatcherHandler {
 
         final var currentThread = Thread.currentThread();
         m.addClosedListener(currentThread::interrupt);
+
+        registerKeepAlive(m);
 
         handleConnection();
     }
@@ -200,14 +211,29 @@ public class SignalJsonRpcDispatcherHandler {
         subscriptionId.ifPresent(this::unsubscribeReceive);
     }
 
+    private void registerKeepAlive(final Manager m) {
+        if (!connectionActive) return;
+        m.addUnidentifiedKeepAlive(connectionKeepAliveToken);
+        keepAliveManagers.add(m);
+    }
+
+    private void unregisterKeepAlive(final Manager m) {
+        if (!connectionActive) return;
+        m.removeUnidentifiedKeepAlive(connectionKeepAliveToken);
+        keepAliveManagers.remove(m);
+    }
+
     private void handleConnection() {
         try {
             jsonRpcReader.readMessages((method, params) -> commandHandler.handleRequest(objectMapper, method, params),
                     response -> logger.debug("Received unexpected response for id {}", response.getId()));
         } finally {
+            connectionActive = false;
             receiveHandlers.forEach((_subscriptionId, handlers) -> handlers.forEach(this::unsubscribeReceiveHandler));
             receiveHandlers.clear();
             unsubscribeAllCallEvents();
+            keepAliveManagers.forEach(m -> m.removeUnidentifiedKeepAlive(connectionKeepAliveToken));
+            keepAliveManagers.clear();
         }
     }
 
