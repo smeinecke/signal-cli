@@ -430,8 +430,7 @@ public class DbusSignalImpl implements Signal, AutoCloseable {
     @Override
     public void sendEndSessionMessage(final List<String> recipients) {
         try {
-            final var results = m.sendEndSessionMessage(getSingleRecipientIdentifiers(recipients, m.getSelfNumber()));
-            checkSendMessageResults(results);
+            m.sendEndSessionMessage(getSingleRecipientIdentifiers(recipients, m.getSelfNumber()));
         } catch (IOException e) {
             throw new Error.Failure(e.getMessage());
         }
@@ -700,9 +699,13 @@ public class DbusSignalImpl implements Signal, AutoCloseable {
         } catch (IOException e) {
             throw new Error.Failure(e.getMessage());
         } catch (RateLimitException e) {
-            throw new Error.Failure(e.getMessage()
-                    + ", retry at "
-                    + DateUtils.formatTimestamp(e.getNextAttemptTimestamp()));
+            final var retryAfterMilliseconds = e.getRetryAfterMilliseconds();
+            throw new Error.Failure(e.getMessage() + (
+                    retryAfterMilliseconds == null
+                            ? ""
+                            : ", retry at " + DateUtils.formatTimestamp(System.currentTimeMillis()
+                                                                        + retryAfterMilliseconds)
+            ));
         }
 
         return numbers.stream().map(number -> registered.get(number).uuid() != null).toList();

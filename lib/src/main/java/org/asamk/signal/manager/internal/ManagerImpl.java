@@ -278,7 +278,7 @@ public class ManagerImpl implements Manager {
             registeredUsers = context.getRecipientHelper().getRegisteredUsers(canonicalizedNumbersSet);
         } catch (CdsiResourceExhaustedException e) {
             logger.debug("CDSI resource exhausted: {}", e.getMessage());
-            throw new RateLimitException(System.currentTimeMillis() + e.getRetryAfterSeconds() * 1000L);
+            throw new RateLimitException(e.getRetryAfterSeconds() * 1000L);
         }
 
         return numbers.stream().collect(Collectors.toMap(n -> n, n -> {
@@ -1091,30 +1091,26 @@ public class ManagerImpl implements Manager {
     }
 
     @Override
-    public SendMessageResults sendEndSessionMessage(Set<RecipientIdentifier.Single> recipients) throws IOException {
-        var messageBuilder = SignalServiceDataMessage.newBuilder().asEndSessionMessage();
-
-        try {
-            return sendMessage(messageBuilder,
-                    recipients.stream().map(RecipientIdentifier.class::cast).collect(Collectors.toSet()),
-                    false);
-        } catch (GroupNotFoundException | NotAGroupMemberException | GroupSendingNotAllowedException e) {
-            throw new AssertionError(e);
-        } finally {
-            for (var recipient : recipients) {
-                final RecipientId recipientId;
-                try {
-                    recipientId = context.getRecipientHelper().resolveRecipient(recipient);
-                } catch (UnregisteredRecipientException e) {
-                    continue;
-                }
-                final var serviceId = context.getAccount()
-                        .getRecipientAddressResolver()
-                        .resolveRecipientAddress(recipientId)
-                        .serviceId();
-                if (serviceId.isPresent()) {
-                    account.getAccountData(ServiceIdType.ACI).getSessionStore().deleteAllSessions(serviceId.get());
-                }
+    public void sendEndSessionMessage(Set<RecipientIdentifier.Single> recipients) throws IOException {
+        for (var recipient : recipients) {
+            final RecipientId recipientId;
+            try {
+                recipientId = context.getRecipientHelper().resolveRecipient(recipient);
+            } catch (UnregisteredRecipientException e) {
+                continue;
+            }
+            final var recipientAddress = context.getAccount()
+                    .getRecipientAddressResolver()
+                    .resolveRecipientAddress(recipientId);
+            final var aciSessionStore = account.getAccountData(ServiceIdType.ACI).getSessionStore();
+            final var pniSessionStore = account.getAccountData(ServiceIdType.PNI).getSessionStore();
+            if (recipientAddress.aci().isPresent()) {
+                aciSessionStore.archiveSessions(recipientAddress.aci().get());
+                pniSessionStore.archiveSessions(recipientAddress.aci().get());
+            }
+            if (recipientAddress.pni().isPresent()) {
+                aciSessionStore.archiveSessions(recipientAddress.pni().get());
+                pniSessionStore.archiveSessions(recipientAddress.pni().get());
             }
         }
     }

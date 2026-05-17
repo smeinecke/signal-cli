@@ -9,13 +9,13 @@ public record SendMessageResult(
         boolean isNetworkFailure,
         boolean isUnregisteredFailure,
         boolean isIdentityFailure,
-        boolean isRateLimitFailure,
+        RateLimitException rateLimitException,
         ProofRequiredException proofRequiredFailure,
         boolean isInvalidPreKeyFailure
 ) {
 
     public static SendMessageResult unregisteredFailure(RecipientAddress address) {
-        return new SendMessageResult(address, false, false, true, false, false, null, false);
+        return new SendMessageResult(address, false, false, true, false, null, null, false);
     }
 
     public static SendMessageResult from(
@@ -23,16 +23,30 @@ public record SendMessageResult(
             RecipientResolver recipientResolver,
             RecipientAddressResolver addressResolver
     ) {
+        final var rateLimitFailure = sendMessageResult.getRateLimitFailure();
+        final var proofRequiredFailure = sendMessageResult.getProofRequiredFailure();
         return new SendMessageResult(addressResolver.resolveRecipientAddress(recipientResolver.resolveRecipient(
                 sendMessageResult.getAddress())).toApiRecipientAddress(),
                 sendMessageResult.isSuccess(),
                 sendMessageResult.isNetworkFailure(),
                 sendMessageResult.isUnregisteredFailure(),
                 sendMessageResult.getIdentityFailure() != null,
-                sendMessageResult.getRateLimitFailure() != null || sendMessageResult.getProofRequiredFailure() != null,
-                sendMessageResult.getProofRequiredFailure() == null
-                        ? null
-                        : new ProofRequiredException(sendMessageResult.getProofRequiredFailure()),
+                rateLimitFailure == null ? null : RateLimitException.from(rateLimitFailure),
+                proofRequiredFailure == null ? null : ProofRequiredException.from(proofRequiredFailure),
                 sendMessageResult.isInvalidPreKeyFailure());
+    }
+
+    public boolean isRateLimitFailure() {
+        return this.rateLimitException != null || this.proofRequiredFailure != null;
+    }
+
+    public Long rateLimitRetryAfterMilliseconds() {
+        if (proofRequiredFailure != null) {
+            return proofRequiredFailure.getRetryAfterMilliseconds();
+        } else if (rateLimitException != null) {
+            return rateLimitException.getRetryAfterMilliseconds();
+        } else {
+            return null;
+        }
     }
 }

@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 plugins {
     java
     application
@@ -8,7 +10,7 @@ plugins {
 
 allprojects {
     group = "org.asamk"
-    version = "0.14.3-SNAPSHOT"
+    version = "0.14.4-SNAPSHOT"
 }
 
 java {
@@ -72,6 +74,11 @@ val excludePatterns = mapOf(
     )
 )
 
+val schemaAnnotationProcessor by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     registerTransform(JarFileExcluder::class) {
         from.attribute(minified, false).attribute(artifactType, "jar")
@@ -82,6 +89,8 @@ dependencies {
         }
     }
 
+    schemaAnnotationProcessor(libs.micronaut.json.schema.processor)
+    schemaAnnotationProcessor(libs.micronaut.inject.java)
     implementation(libs.bouncycastle)
     implementation(libs.jackson.databind)
     implementation(libs.argparse4j)
@@ -90,6 +99,10 @@ dependencies {
     implementation(libs.slf4j.jul)
     implementation(libs.logback)
     implementation(libs.zxing)
+    implementation(libs.micronaut.json.schema.annotations)
+    if (gradle.startParameter.taskNames.any { it.contains("jsonSchemas") }) {
+        implementation(libs.micronaut.json.schema.generator)
+    }    
     implementation(project(":libsignal-cli"))
 
     testImplementation(libs.junit.jupiter)
@@ -157,6 +170,33 @@ tasks.register("writeLibsignalVersion") {
             file("libsignal-version").writeText(version + "\n")
         } else {
             throw GradleException("Could not find libsignal-client dependency")
+        }
+    }
+}
+
+tasks.register<JavaCompile>("jsonSchemas") {
+    dependsOn(tasks.compileJava)
+    val schemaBaseUri = "http://localhost:8080/schemas/"
+    source = sourceSets.main.get().java
+    include("org/asamk/signal/json/**/*.java")
+    classpath = sourceSets.main.get().compileClasspath + files(sourceSets.main.get().java.destinationDirectory)
+    destinationDirectory.set(layout.buildDirectory.dir("generated"))
+    options.annotationProcessorPath = schemaAnnotationProcessor
+    options.compilerArgs.addAll(
+        listOf(
+            "-Amicronaut.processing.group=org.asamk",
+            "-Amicronaut.processing.module=signal-cli",
+            "-Amicronaut.processing.annotations=org.asamk.signal.json.*",
+            "-Amicronaut.jsonschema.baseUri=$schemaBaseUri",
+        )
+    )
+    doLast {
+        fileTree(destinationDirectory.get().dir("META-INF/schemas").asFile) {
+            include("*.schema.json")
+        }.forEach { schemaFile ->
+            val normalized = schemaFile.readText().replace("\"$schemaBaseUri/", "\"")
+            val prettyJson = JsonOutput.prettyPrint(normalized)
+            schemaFile.writeText("$prettyJson\n")
         }
     }
 }

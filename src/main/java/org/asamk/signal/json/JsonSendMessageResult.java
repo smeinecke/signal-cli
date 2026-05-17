@@ -1,10 +1,12 @@
 package org.asamk.signal.json;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.micronaut.jsonschema.JsonSchema;
 
 import org.asamk.signal.manager.api.GroupId;
 import org.asamk.signal.manager.api.SendMessageResult;
 
+@JsonSchema(title = "SendMessageResult")
 public record JsonSendMessageResult(
         JsonRecipientAddress recipientAddress,
         @JsonInclude(JsonInclude.Include.NON_NULL) String groupId,
@@ -18,6 +20,7 @@ public record JsonSendMessageResult(
     }
 
     public static JsonSendMessageResult from(SendMessageResult result, GroupId groupId) {
+        final var rateLimitRetryAfterMilliseconds = result.rateLimitRetryAfterMilliseconds();
         return new JsonSendMessageResult(JsonRecipientAddress.from(result.address()),
                 groupId != null ? groupId.toBase64() : null,
                 result.isSuccess()
@@ -32,7 +35,7 @@ public record JsonSendMessageResult(
                                                   ? Type.INVALID_PRE_KEY_FAILURE
                                                         : Type.IDENTITY_FAILURE,
                 result.proofRequiredFailure() != null ? result.proofRequiredFailure().getToken() : null,
-                result.proofRequiredFailure() != null ? result.proofRequiredFailure().getRetryAfterSeconds() : null);
+                rateLimitRetryAfterMilliseconds == null ? null : Math.ceilDiv(rateLimitRetryAfterMilliseconds, 1000L));
     }
 
     public enum Type {
